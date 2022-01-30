@@ -1,6 +1,0 @@
-[submodule "src/"]
-	path = src/
-	url = https://github.com/diy-smarthome/eventhandler.git
-[submodule "eventhandler"]
-	path = eventhandler
-	url = https://github.com/diy-smarthome/eventhandler.git
