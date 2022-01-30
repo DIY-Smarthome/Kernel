@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as https from 'http';
 
-import Delegate from '../Delegate/Delegate';
-import { DetailedStatus } from '../enums/DetailedStatus';
-import { Eventdata } from '../interfaces/Eventdata';
-import { SubscriptionChangeData } from '../interfaces/SubscriptionChangeData';
+import Delegate from './Utils/Delegate/Delegate';
+import { DetailedStatus } from './Utils/enums/DetailedStatus';
+import { Eventdata } from './Utils/interfaces/Eventdata';
+import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeData';
 import RequestHandler from './requester';
 
 //Open server for Requests
@@ -58,7 +58,7 @@ const server = https.createServer({}, (req, res) => {
 
 let lastPort = 8000;
 const handlers = new Map<number, RequestHandler>(); //All handlers for modules
-const bindings = new Map<string, Delegate<(...args: unknown[]) => unknown>>(); //All event bindings
+const bindings = new Map<string, Delegate<(...args: any[]) => unknown>>(); //All event bindings
 //let middlewares = new Map<string, Delegate<(...args: any) => any>>(); currently unused
 
 /**
