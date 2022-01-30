@@ -1,0 +1,25 @@
+{
+  "name": "diy-smarhome-kernel",
+  "version": "1.0.0",
+  "description": "Kernel for DIY-Smarthome",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DIY-Smarthome/Kernel.git"
+  },
+  "keywords": [
+    "Smarthome"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DIY-Smarthome/Kernel/issues"
+  },
+  "homepage": "https://github.com/DIY-Smarthome/Kernel#readme",
+  "devDependencies": {
+    "typescript": "^4.5.5"
+  }
+}
