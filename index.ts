@@ -1,5 +1,6 @@
 import * as fs from 'fs';
-import * as https from 'http';
+import * as net from 'net';
+import * as peer from 'noise-peer';
 
 import Delegate from './Utils/Delegate/Delegate';
 import { DetailedStatus } from './Utils/enums/DetailedStatus';
@@ -8,35 +9,40 @@ import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeDat
 import RequestHandler from './requester';
 
 //Open server for Requests
-const server = https.createServer({}, (req, res) => {
+const server = net.createServer({}, (rawStream) => {
+    const secStream = peer
     let body = '';
-    req.on('data', chunk => {
+    let response = null;
+
+    secStream.on('data', chunk => {
         body += chunk.toString(); // convert Buffer to string and collect chunks
     });
-    req.on('end', () => {
+    secStream.on('end', () => {
         const data: Eventdata = JSON.parse(body);
         body = "";
-        switch (req.url) { //Evaluate eventname
+        switch (data.eventname) { //Evaluate eventname
             case "/kernel/subscribe":
-                subscribe(data, res);
+                response = subscribe(data);
                 break;
             case "/kernel/unsubscribe":
-                unsubscribe(data, res);
+                response = unsubscribe(data);
                 break;
             case "/kernel/init":
-                init(data, res);
+                response = init(data);
                 break;
             case "/kernel/dispose":
-                disposeModule(data, res);
+                response = disposeModule(data);
                 break;
             case "/kernel/log":
-                log(data, res);
+                response = log(data);
                 break;
             default: //Handle all custom events
-                handle(req.url.substring(1), data, res);
+                response = handle(data.eventname, data);
                 break;
         }
     });
+    secStream.write(response);
+    secStream.end();
 }).listen(8000);
 
 //Shutdown logic
@@ -66,7 +72,7 @@ const bindings = new Map<string, Delegate<(...args: any[]) => unknown>>(); //All
  * @param body payload from module
  * @param res response for module
  */
-function subscribe(body: Eventdata, res: https.ServerResponse) {
+function subscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
     if (!bindings.has(eventdata.eventname)) //Create new Delegate if there is none
         bindings.set(eventdata.eventname, new Delegate())
@@ -77,8 +83,11 @@ function subscribe(body: Eventdata, res: https.ServerResponse) {
     } else {
         console.log("Module " + body.modulename + " tried to subscribe to " + eventdata.eventname + " but was already subscribed.")
     }
-    res.statusCode = 200;
-    res.end();
+
+    return [{
+        statusCode: 200,
+        body: {}
+    }]
 }
 
 /**
@@ -86,7 +95,7 @@ function subscribe(body: Eventdata, res: https.ServerResponse) {
  * @param body payload from module
  * @param res response for module
  */
-function unsubscribe(body: Eventdata, res: https.ServerResponse) {
+function unsubscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
     const handler = handlers.get(body.port);
 
@@ -101,8 +110,10 @@ function unsubscribe(body: Eventdata, res: https.ServerResponse) {
         console.log("Module " + body.modulename + " tried to unsubscribe from " + eventdata.eventname + " but wasn't subscribed!")
     }
 
-    res.statusCode = 200;
-    res.end();
+    return [{
+        statusCode: 200,
+        body: {}
+    }]
 }
 
 /**
@@ -111,25 +122,20 @@ function unsubscribe(body: Eventdata, res: https.ServerResponse) {
  * @param body payload from module (parameters for other module call)
  * @param res response for caller module
  */
-async function handle(eventname: string, body: Eventdata, res: https.ServerResponse) {
+async function handle(eventname: string, body: Eventdata) {
     if (!bindings.has(eventname)) { //Return error if there are no subscriptions
-        res.write(JSON.stringify([{
+        return [{
             "modulename": "kernel",
             "statuscode": 207,
             "detailedstatus": DetailedStatus.NO_SUBSCRIPTIONS,
             "content": []
-        }]))
-        res.statusCode = 200;
-        res.end();
-        return;
+        }];
     }
 
 
     const delegate = bindings.get(eventname); //Get event bindings
     const [results,] = await delegate.invokeAsync(undefined, eventname, body); //Call all subscribed modules with payload
-    res.write(JSON.stringify(results));
-    res.statusCode = 200;
-    res.end();
+    return results;
 }
 
 /**
@@ -137,17 +143,15 @@ async function handle(eventname: string, body: Eventdata, res: https.ServerRespo
  * @param body payload from module
  * @param res response for module
  */
-function init(body: Eventdata, res: https.ServerResponse) {
+function init(body: Eventdata) {
     const handler = new RequestHandler('127.0.0.1', ++lastPort); //Create new Handler for new Module on a new port
     handlers.set(lastPort, handler);
-    res.write(JSON.stringify([{ //Return new port to module (used for listening Server)
+    console.log("Init handler for " + lastPort);
+    return [{ //Return new port to module (used for listening Server)
         statuscode: 200,
         modulename: "kernel",
         content: lastPort
-    }]));
-    res.statusCode = 200;
-    res.end();
-    console.log("Init handler for " + lastPort)
+    }];
 }
 
 /**
@@ -155,7 +159,7 @@ function init(body: Eventdata, res: https.ServerResponse) {
  * @param body payload from module
  * @param res response for module
  */
-function disposeModule(body: Eventdata, res: https.ServerResponse) {
+function disposeModule(body: Eventdata) {
     let result = false;
     const handler = handlers.get(body.port);
     for (const [eventname, delegate] of bindings) { //Iterate all bindings and remove every subscription of given module
@@ -165,8 +169,10 @@ function disposeModule(body: Eventdata, res: https.ServerResponse) {
         }
     }
     handlers.delete(body.port); //Remove handler of module
-    res.statusCode = 200;
-    res.end();
+    return [{
+        statusCode: 200,
+        body: {}
+    }];
 }
 
 /**
@@ -174,17 +180,22 @@ function disposeModule(body: Eventdata, res: https.ServerResponse) {
  * @param body payload from module
  * @param res response for module
  */
-async function log(body: Eventdata, res: https.ServerResponse) {
+async function log(body: Eventdata) {
     if (!(body.payload["message"] as string).endsWith("\r\n"))
         body.payload["message"] += "\r\n";
 
     fs.appendFile('./Logs/log.txt', <string>body.payload["message"], (err) => {
         if (err) {
             console.error(err);
-            res.statusCode = 500;
-        } else {
-            res.statusCode = 200;
+            return [{
+                statusCode: 500,
+                body: {}
+            }];
         }
-        res.end();
+
+        return [{
+            statusCode: 200,
+            body: {}
+        }];
     })
 }
