@@ -1,12 +1,11 @@
 import * as https from 'http';
+import * as peer from 'noise-peer';
 
 export default class RequestHandler {
-	private host: string;
-	private port: number;
+	private SecStream: peer.NoisePeer
 
-	constructor(host: string, port: number) {
-		this.host = host;
-		this.port = port;
+	constructor(SecStream: peer.NoisePeer) {
+		this.SecStream = SecStream;
 	}
 
 	request(eventname: string, payload: unknown): Promise<Response[]> {
@@ -14,24 +13,15 @@ export default class RequestHandler {
 	}
 
 	requestCustomTimeout(eventName: string, payload: unknown): Promise<Response[]> {
-		return this.doRequest(this.host, this.port, eventName, "POST", {}, payload);
+		return this.doRequest(this.SecStream, eventName, payload);
 	}
 
-	private doRequest(hostname: string, port: number, path: string, method: string, headers: https.OutgoingHttpHeaders, body: unknown): Promise<Response[]> {
+	private doRequest(SecStream: peer.NoisePeer, path: string, payload: unknown): Promise<Response[]> {
 		return new Promise(function (resolve, reject) {
-			const data = JSON.stringify(body)
-			headers['Content-Type'] = 'application/json';
-			headers['Content-Length'] = data.length;
-			const options: https.RequestOptions = {
-				hostname: hostname,
-				port: port,
-				path: "/" + path,
-				method: method,
-				headers: headers
-			}
+			const data = JSON.stringify(payload)
 
 			//Prepare request with response logic
-			const req = https.request(options, res => {
+			const req = this.secStream.write(data);
 				let body = '';
 				res.on('data', chunk => { //receive data chunks
 					body += chunk.toString();

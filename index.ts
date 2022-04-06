@@ -63,7 +63,7 @@ const server = net.createServer({}, (rawStream) => {
 })
 
 let lastPort = 8000;
-const handlers = new Map<number, RequestHandler>(); //All handlers for modules
+const handlers = new Map<string, RequestHandler>(); //All handlers for modules
 const bindings = new Map<string, Delegate<(...args: any[]) => unknown>>(); //All event bindings
 //let middlewares = new Map<string, Delegate<(...args: any) => any>>(); currently unused
 
@@ -76,7 +76,7 @@ function subscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
     if (!bindings.has(eventdata.eventname)) //Create new Delegate if there is none
         bindings.set(eventdata.eventname, new Delegate())
-    const handler = handlers.get(body.port); //Get the Delegate
+    const handler = handlers.get(body.modulename); //Get the Delegate
     const result = bindings.get(eventdata.eventname).bind(handler.request, handler); //Bind new handler to event
     if (result) { //Log varying success
         console.log("Module " + body.modulename + " subscribed to " + eventdata.eventname)
@@ -97,7 +97,7 @@ function subscribe(body: Eventdata) {
  */
 function unsubscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
-    const handler = handlers.get(body.port);
+    const handler = handlers.get(body.modulename);
 
     let result = false;
     if (bindings.has(eventdata.eventname)) //Remove handler binding
@@ -145,7 +145,7 @@ async function handle(eventname: string, body: Eventdata) {
  */
 function init(body: Eventdata) {
     const handler = new RequestHandler('127.0.0.1', ++lastPort); //Create new Handler for new Module on a new port
-    handlers.set(lastPort, handler);
+    handlers.set(body.modulename, handler);
     console.log("Init handler for " + lastPort);
     return [{ //Return new port to module (used for listening Server)
         statuscode: 200,
@@ -161,14 +161,14 @@ function init(body: Eventdata) {
  */
 function disposeModule(body: Eventdata) {
     let result = false;
-    const handler = handlers.get(body.port);
+    const handler = handlers.get(body.modulename);
     for (const [eventname, delegate] of bindings) { //Iterate all bindings and remove every subscription of given module
         result = delegate.unbind(handler.request, handler);
         if (result) {
             console.log("Module " + body.modulename + " unsubscribed from " + eventname)
         }
     }
-    handlers.delete(body.port); //Remove handler of module
+    handlers.delete(body.modulename); //Remove handler of module
     return [{
         statusCode: 200,
         body: {}
