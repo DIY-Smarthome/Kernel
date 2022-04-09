@@ -10,7 +10,7 @@ import RequestHandler from './requester';
 
 //Open server for Requests
 const server = net.createServer({}, (rawStream) => {
-    const secStream = peer
+    const secStream = peer(rawStream);
     let body = '';
     let response = null;
 
@@ -28,7 +28,7 @@ const server = net.createServer({}, (rawStream) => {
                 response = unsubscribe(data);
                 break;
             case "/kernel/init":
-                response = init(data);
+                response = init(data, secStream);
                 break;
             case "/kernel/dispose":
                 response = disposeModule(data);
@@ -62,7 +62,6 @@ const server = net.createServer({}, (rawStream) => {
     });
 })
 
-let lastPort = 8000;
 const handlers = new Map<string, RequestHandler>(); //All handlers for modules
 const bindings = new Map<string, Delegate<(...args: any[]) => unknown>>(); //All event bindings
 //let middlewares = new Map<string, Delegate<(...args: any) => any>>(); currently unused
@@ -143,14 +142,13 @@ async function handle(eventname: string, body: Eventdata) {
  * @param body payload from module
  * @param res response for module
  */
-function init(body: Eventdata) {
-    const handler = new RequestHandler('127.0.0.1', ++lastPort); //Create new Handler for new Module on a new port
+function init(body: Eventdata, secStream: any) {
+    const handler = new RequestHandler(secStream); //Create new Handler for new Module on a new port
     handlers.set(body.modulename, handler);
-    console.log("Init handler for " + lastPort);
+    console.log("Init handler for " + body.modulename);
     return [{ //Return new port to module (used for listening Server)
         statuscode: 200,
         modulename: "kernel",
-        content: lastPort
     }];
 }
 
