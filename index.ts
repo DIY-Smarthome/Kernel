@@ -142,8 +142,8 @@ async function handle(eventname: string, body: Eventdata) {
  * @param body payload from module
  * @param res response for module
  */
-function init(body: Eventdata, secStream: any) {
-    const handler = new RequestHandler(secStream); //Create new Handler for new Module on a new port
+function init(body: Eventdata, secStream: peer.NoisePeer) {
+    const handler = new RequestHandler(secStream, body.timeout); //Create new Handler for new Module on a new port
     handlers.set(body.modulename, handler);
     console.log("Init handler for " + body.modulename);
     return [{ //Return new port to module (used for listening Server)
