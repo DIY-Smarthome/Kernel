@@ -1,24 +1,21 @@
 import * as fs from 'fs';
 import * as net from 'net';
-import * as peer from 'noise-peer';
+import peer from 'noise-peer';
 
+import RequestHandler from './requester';
 import Delegate from './Utils/Delegate/Delegate';
 import { DetailedStatus } from './Utils/enums/DetailedStatus';
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeData';
-import RequestHandler from './requester';
 
 //Open server for Requests
 const server = net.createServer({}, (rawStream) => {
-    const secStream = peer(rawStream);
-    let body = '';
+    const secStream = peer(rawStream, false);
     let response = null;
 
-    secStream.on('data', chunk => {
-        body += chunk.toString(); // convert Buffer to string and collect chunks
-    });
-    secStream.on('end', () => {
+    secStream.on('data', body => {
         const data: Eventdata = JSON.parse(body);
+        console.log(data);
         body = "";
         switch (data.eventname) { //Evaluate eventname
             case "/kernel/subscribe":
@@ -40,9 +37,8 @@ const server = net.createServer({}, (rawStream) => {
                 response = handle(data.eventname, data);
                 break;
         }
+        secStream.write(JSON.stringify(response));
     });
-    secStream.write(response);
-    secStream.end();
 }).listen(8000);
 
 //Shutdown logic

@@ -1,5 +1,6 @@
-import * as peer from 'noise-peer';
+import peer from 'noise-peer';
 import { v4 as getUUID } from 'uuid';
+
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { Response } from './Utils/interfaces/Response';
 
@@ -13,13 +14,7 @@ export default class RequestHandler {
 		this.requestTimeout = requestTimeout;
 		this.pendingMessages = new Map<string, (value: Response | PromiseLike<Response>) => void>();
 
-		let body = '';
-		let response = null;
-
-		this.SecStream.on('data', chunk => {
-			body += chunk.toString(); // convert Buffer to string and collect chunks
-		});
-		this.SecStream.on('end', () => { 
+		this.SecStream.on('data', body => {
 			const data: Response = JSON.parse(body);
 			if (this.pendingMessages.has(data.id)) {
 				this.pendingMessages.get(data.id).call(null, data);
@@ -49,7 +44,7 @@ export default class RequestHandler {
 			}
 
 			//Prepare request with response logic
-			SecStream.write(data);
+			SecStream.write(JSON.stringify(data));
 			SecStream.end();
 		});
 		return prm;
