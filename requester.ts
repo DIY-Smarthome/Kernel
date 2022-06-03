@@ -45,7 +45,6 @@ export default class RequestHandler {
 
 			//Prepare request with response logic
 			SecStream.write(JSON.stringify(data));
-			SecStream.end();
 		});
 		return prm;
 	}

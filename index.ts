@@ -13,31 +13,40 @@ const server = net.createServer({}, (rawStream) => {
     const secStream = peer(rawStream, false);
     let response = null;
 
-    secStream.on('data', body => {
+    secStream.on('data', async (body) => {
+        console.log("Data1")
         const data: Eventdata = JSON.parse(body);
         console.log(data);
         body = "";
         switch (data.eventname) { //Evaluate eventname
-            case "/kernel/subscribe":
+            case "kernel/subscribe":
                 response = subscribe(data);
                 break;
-            case "/kernel/unsubscribe":
+            case "kernel/unsubscribe":
                 response = unsubscribe(data);
                 break;
-            case "/kernel/init":
+            case "kernel/init":
                 response = init(data, secStream);
                 break;
-            case "/kernel/dispose":
+            case "kernel/dispose":
                 response = disposeModule(data);
                 break;
-            case "/kernel/log":
+            case "kernel/log":
                 response = log(data);
                 break;
             default: //Handle all custom events
-                response = handle(data.eventname, data);
+                response = await handle(data.eventname, data);
                 break;
         }
-        secStream.write(JSON.stringify(response));
+        
+        var container = {
+            id: data.id,
+            eventname: data.eventname,
+            payload: response
+        }
+        
+        console.log(JSON.stringify(container));
+        secStream.write(JSON.stringify(container));
     });
 }).listen(8000);
 
@@ -80,6 +89,7 @@ function subscribe(body: Eventdata) {
     }
 
     return [{
+        id: body.id,
         statusCode: 200,
         body: {}
     }]
