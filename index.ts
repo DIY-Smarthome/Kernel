@@ -32,7 +32,7 @@ const server = net.createServer({}, (rawStream) => {
                 response = disposeModule(data);
                 break;
             case "kernel/log":
-                response = log(data);
+                response = await log(data);
                 break;
             default: //Handle all custom events
                 response = await handle(data.eventname, data);
