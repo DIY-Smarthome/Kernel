@@ -14,9 +14,7 @@ const server = net.createServer({}, (rawStream) => {
     let response = null;
 
     secStream.on('data', async (body) => {
-        console.log("Data1")
         const data: Eventdata = JSON.parse(body);
-        console.log(data);
         body = "";
         switch (data.eventname) { //Evaluate eventname
             case "kernel/subscribe":
@@ -39,14 +37,11 @@ const server = net.createServer({}, (rawStream) => {
                 break;
         }
         
-        var container = {
+        secStream.write(JSON.stringify({
             id: data.id,
             eventname: data.eventname,
             payload: response
-        }
-        
-        console.log(JSON.stringify(container));
-        secStream.write(JSON.stringify(container));
+        }));
     });
 }).listen(8000);
 
