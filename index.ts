@@ -1,48 +1,53 @@
 import * as fs from 'fs';
 import * as net from 'net';
-import * as peer from 'noise-peer';
+import peer from 'noise-peer';
 
+import RequestHandler from './requester';
 import Delegate from './Utils/Delegate/Delegate';
 import { DetailedStatus } from './Utils/enums/DetailedStatus';
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeData';
-import RequestHandler from './requester';
 
 //Open server for Requests
 const server = net.createServer({}, (rawStream) => {
-    const secStream = peer
-    let body = '';
+    const secStream = peer(rawStream, false);
     let response = null;
 
-    secStream.on('data', chunk => {
-        body += chunk.toString(); // convert Buffer to string and collect chunks
-    });
-    secStream.on('end', () => {
+    secStream.on('data', async (body) => {
+        console.log("Data1")
         const data: Eventdata = JSON.parse(body);
+        console.log(data);
         body = "";
         switch (data.eventname) { //Evaluate eventname
-            case "/kernel/subscribe":
+            case "kernel/subscribe":
                 response = subscribe(data);
                 break;
-            case "/kernel/unsubscribe":
+            case "kernel/unsubscribe":
                 response = unsubscribe(data);
                 break;
-            case "/kernel/init":
-                response = init(data);
+            case "kernel/init":
+                response = init(data, secStream);
                 break;
-            case "/kernel/dispose":
+            case "kernel/dispose":
                 response = disposeModule(data);
                 break;
-            case "/kernel/log":
-                response = log(data);
+            case "kernel/log":
+                response = await log(data);
                 break;
             default: //Handle all custom events
-                response = handle(data.eventname, data);
+                response = await handle(data.eventname, data);
                 break;
         }
+        
+        var container = {
+            id: data.id,
+            eventname: data.eventname,
+            payload: response
+        }
+        
+        console.log(JSON.stringify(container));
+        secStream.write(JSON.stringify(container));
     });
-    secStream.write(response);
-    secStream.end();
 }).listen(8000);
 
 //Shutdown logic
@@ -62,8 +67,7 @@ const server = net.createServer({}, (rawStream) => {
     });
 })
 
-let lastPort = 8000;
-const handlers = new Map<number, RequestHandler>(); //All handlers for modules
+const handlers = new Map<string, RequestHandler>(); //All handlers for modules
 const bindings = new Map<string, Delegate<(...args: any[]) => unknown>>(); //All event bindings
 //let middlewares = new Map<string, Delegate<(...args: any) => any>>(); currently unused
 
@@ -76,7 +80,7 @@ function subscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
     if (!bindings.has(eventdata.eventname)) //Create new Delegate if there is none
         bindings.set(eventdata.eventname, new Delegate())
-    const handler = handlers.get(body.port); //Get the Delegate
+    const handler = handlers.get(body.modulename); //Get the Delegate
     const result = bindings.get(eventdata.eventname).bind(handler.request, handler); //Bind new handler to event
     if (result) { //Log varying success
         console.log("Module " + body.modulename + " subscribed to " + eventdata.eventname)
@@ -85,6 +89,7 @@ function subscribe(body: Eventdata) {
     }
 
     return [{
+        id: body.id,
         statusCode: 200,
         body: {}
     }]
@@ -97,7 +102,7 @@ function subscribe(body: Eventdata) {
  */
 function unsubscribe(body: Eventdata) {
     const eventdata: SubscriptionChangeData = <SubscriptionChangeData>body.payload;
-    const handler = handlers.get(body.port);
+    const handler = handlers.get(body.modulename);
 
     let result = false;
     if (bindings.has(eventdata.eventname)) //Remove handler binding
@@ -143,14 +148,13 @@ async function handle(eventname: string, body: Eventdata) {
  * @param body payload from module
  * @param res response for module
  */
-function init(body: Eventdata) {
-    const handler = new RequestHandler('127.0.0.1', ++lastPort); //Create new Handler for new Module on a new port
-    handlers.set(lastPort, handler);
-    console.log("Init handler for " + lastPort);
+function init(body: Eventdata, secStream: peer.NoisePeer) {
+    const handler = new RequestHandler(secStream, body.timeout); //Create new Handler for new Module on a new port
+    handlers.set(body.modulename, handler);
+    console.log("Init handler for " + body.modulename);
     return [{ //Return new port to module (used for listening Server)
         statuscode: 200,
         modulename: "kernel",
-        content: lastPort
     }];
 }
 
@@ -161,14 +165,14 @@ function init(body: Eventdata) {
  */
 function disposeModule(body: Eventdata) {
     let result = false;
-    const handler = handlers.get(body.port);
+    const handler = handlers.get(body.modulename);
     for (const [eventname, delegate] of bindings) { //Iterate all bindings and remove every subscription of given module
         result = delegate.unbind(handler.request, handler);
         if (result) {
             console.log("Module " + body.modulename + " unsubscribed from " + eventname)
         }
     }
-    handlers.delete(body.port); //Remove handler of module
+    handlers.delete(body.modulename); //Remove handler of module
     return [{
         statusCode: 200,
         body: {}
