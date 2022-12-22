@@ -1,27 +1,15 @@
 import * as fs from 'fs';
 import * as net from 'net';
 import peer from 'noise-peer';
-import parseCLIConfig from 'minimist';
 
 import RequestHandler from './requester';
+import getConfig, { MergeConfig } from './Utils/configHelper';
 import Delegate from './Utils/Delegate/Delegate';
 import { DetailedStatus } from './Utils/enums/DetailedStatus';
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeData';
-import { MergeConfig } from './Utils/default_config';
-const cliParams = parseCLIConfig(process.argv.slice(2));
-let configData;
 
-// Hierarchy of parameters:
-// CLI Params
-// Config file Params
-// Default Params
-if (cliParams["configfile"])
-    configData = JSON.parse(fs.readFileSync(cliParams["configfile"]).toString());
-    
-
-const kernelConf = MergeConfig(cliParams, configData);
-
+const kernelConf = getConfig();
 //Open server for Requests
 const server = net.createServer({}, (rawStream) => {
     const secStream = peer(rawStream, false);
