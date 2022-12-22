@@ -1,12 +1,26 @@
 import * as fs from 'fs';
 import * as net from 'net';
 import peer from 'noise-peer';
+import parseCLIConfig from 'minimist';
 
 import RequestHandler from './requester';
 import Delegate from './Utils/Delegate/Delegate';
 import { DetailedStatus } from './Utils/enums/DetailedStatus';
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { SubscriptionChangeData } from './Utils/interfaces/SubscriptionChangeData';
+import { MergeConfig } from './Utils/default_config';
+const cliParams = parseCLIConfig(process.argv.slice(2));
+let configData;
+
+// Hierarchy of parameters:
+// CLI Params
+// Config file Params
+// Default Params
+if (cliParams["configfile"])
+    configData = JSON.parse(fs.readFileSync(cliParams["configfile"]).toString());
+    
+
+const kernelConf = MergeConfig(cliParams, configData);
 
 //Open server for Requests
 const server = net.createServer({}, (rawStream) => {
@@ -15,6 +29,9 @@ const server = net.createServer({}, (rawStream) => {
 
     secStream.on('data', async (body) => {
         const data: Eventdata = JSON.parse(body);
+        if (!data || !data.pass || data.pass != kernelConf.pass)
+            return;
+        
         body = "";
         switch (data.eventname) { //Evaluate eventname
             case "kernel/subscribe":
@@ -144,7 +161,7 @@ async function handle(eventname: string, body: Eventdata) {
  * @param res response for module
  */
 function init(body: Eventdata, secStream: peer.NoisePeer) {
-    const handler = new RequestHandler(secStream, body.timeout); //Create new Handler for new Module on a new port
+    const handler = new RequestHandler(secStream, MergeConfig({timeout: body.timeout}, kernelConf)); //Create new Handler for new Module on a new port
     handlers.set(body.modulename, handler);
     console.log("Init handler for " + body.modulename);
     return [{ //Return new port to module (used for listening Server)

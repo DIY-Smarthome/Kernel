@@ -1,17 +1,18 @@
 import peer from 'noise-peer';
 import { v4 as getUUID } from 'uuid';
+import { Configdata } from './Utils/interfaces/Configdata';
 
 import { Eventdata } from './Utils/interfaces/Eventdata';
 import { Response } from './Utils/interfaces/Response';
 
 export default class RequestHandler {
 	private SecStream: peer.NoisePeer
-	private requestTimeout: number;
+	private config: Configdata;
 	private pendingMessages: Map<string, (value: Response | PromiseLike<Response>) => void>;
 
-	constructor(SecStream: peer.NoisePeer, requestTimeout: number) {
+	constructor(SecStream: peer.NoisePeer, config: Configdata) {
 		this.SecStream = SecStream;
-		this.requestTimeout = requestTimeout;
+		this.config = config;
 		this.pendingMessages = new Map<string, (value: Response | PromiseLike<Response>) => void>();
 
 		this.SecStream.on('data', body => {
@@ -38,8 +39,9 @@ export default class RequestHandler {
 			const data: Eventdata = {
 				id: uuid,
 				modulename: 'kernel',
+				pass: this.config.pass,
 				eventname: path,
-				timeout: this.requestTimeout,
+				timeout: this.config.timeout,
 				payload: payload
 			}
 
